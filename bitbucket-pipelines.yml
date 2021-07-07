@@ -1,0 +1,34 @@
+image: python:3.7.3
+
+pipelines:
+  custom:
+    deploy-EC2-CAPE.YML-yaml-in-eval-environment:
+      - step:
+          name: Deploy EC2-CAPE.YML in eval environment for Cape Tool
+          deployment: evaluation
+          caches: 
+          - pip
+          script:
+            - echo "=======================================Install required packages=================================="
+            - apt update
+            - apt -y upgrade
+            - export packagenumber=$BITBUCKET_BUILD_NUMBER
+            - apt -y install curl dirmngr apt-transport-https lsb-release ca-certificates jq
+            - curl -sL https://deb.nodesource.com/setup_12.x | bash -
+            - apt -y install nodejs
+            - pip3 install --upgrade pip
+            - pip3 install awscli aws-sam-cli
+            - echo "=======================================Configure aws authentication for Eval====================="
+            - aws configure set aws_access_key_id $EVAL_ROLE_USER_ACCESS_KEY
+            - aws configure set aws_secret_access_key $EVAL_ROLE_USER_SECURITY_KEY
+            - aws configure set default.region us-east-1
+            - aws sts assume-role --role-arn $EVAL_ROLE_ARN_SERVERLESS --role-session-name $SESSION_NAME_SERVERLESS  > sts.secret
+            - export AWS_SECRET_ACCESS_KEY=`(cat sts.secret | jq -r '.Credentials .SecretAccessKey')`
+            - export AWS_ACCESS_KEY_ID=`(cat sts.secret | jq -r '.Credentials .AccessKeyId')`
+            - export AWS_SESSION_TOKEN=`(cat sts.secret | jq -r '.Credentials .SessionToken')`
+
+            - echo "=======================================Deploy====================================================="
+            - cd /opt/atlassian/pipelines/agent/build/
+            - sam build -t EC2-CAPE.YML
+            - sam package --template-file EC2-CAPE.YML --output-template-file EC2-CAPE-PACK.YAML --s3-bucket EVAL_S3_BUCKET_NAME
+            - sam deploy --template-file EC2-CAPE-PACK.YAML --stack-name CAPE-EC2 --capabilities CAPABILITY_NAMED_IAM --region us-east-1

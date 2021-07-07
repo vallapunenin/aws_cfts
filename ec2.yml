@@ -1,0 +1,219 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Provision EC2 Instance for Cape tool integration POC 
+
+###############################################################################################################################
+# GLOBAL PARAMETER SECTION FOR ENV TYPE, VPC, PRIVATE SUBNETS, PROJECT, COST CENTER
+
+###############################################################################################################################
+Parameters:
+
+  EnvType:
+    Description: 'Environment type (eg, dev, qa, prod)'
+    Type: String
+    AllowedValues:
+      - sandbox
+      - evaluation
+      - development
+      - ftest
+      - ptest
+      - staging
+      - production
+      - sharedservices
+    Default: evaluation
+  AppName:
+    Type: String
+    Default: CAPE 
+  PrivateSubnetId01:
+    Type : 'AWS::SSM::Parameter::Value<String>'
+    Default: /serverless/global/misc/PrivateSubnetId01
+  PrivateSubnetId02:
+    Type : 'AWS::SSM::Parameter::Value<String>'
+    Default: /serverless/global/misc/PrivateSubnetId02
+  PrivateSubnetId03:
+    Type : 'AWS::SSM::Parameter::Value<String>'
+    Default: /serverless/global/misc/PrivateSubnetId03
+  Project:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Description: Project Code for AWS Resources
+    Default: /serverless/global/misc/projectcode
+  CostCenter:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Description: Cost Center Details for AWS Resources
+    Default: /serverless/global/misc/costcenter
+  VpcId:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Description: 'VPC Details'
+    Default: /serverless/global/misc/vpcid
+  KeyName:
+    Description: The EC2 Key Pair to allow SSH access to the node instances
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Default: cape # FOR EVALUATION 
+    
+  ImageId:
+    Description: The AMI to create EC2 instances
+    Type: String
+    Default: 'ami-047a51fa27710816e'
+Resources:
+#################################################################################################################################
+
+## LAUNCH TEMPLATE FOR EC2 INSTANCE
+
+#################################################################################################################################
+
+  
+  CAPEEC2LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateName: CAPE 
+      LaunchTemplateData:
+        InstanceType: t3.xlarge 
+        DisableApiTermination: 'true'
+        KeyName: !Ref KeyName
+        ImageId: !Ref ImageId 
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 25 
+              VolumeType: gp2
+              Encrypted: true
+        SecurityGroupIds:
+          - !Ref CAPESecurityGroupID
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: CostCenter
+                Value: !Ref CostCenter
+              - Key: Project
+                Value: !Ref Project 
+              - Key: Pod
+                Value: CAPE 
+              - Key: Technology
+                Value: CAPE
+        
+  CAPESecurityGroupID:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Cape tool integration POC' 
+      GroupName: !Sub "${EnvType}-${AppName}-SG" 
+      Tags:
+        - Key: Name
+          Value: CAPE-POC 
+        - Key: Project
+          Value: !Ref Project 
+        - Key: CostCenter
+          Value: !Ref CostCenter 
+      VpcId:
+        Ref: VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22 
+          ToPort: 22 
+          CidrIp: 0.0.0.0/0
+
+  CAPEEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles: [!Ref 'CAPEEC2InstanceRole']
+  CAPEEC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ec2.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: EC2policy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              - "ec2:*"
+            Resource: '*'
+#################################################################################################################################
+
+### CAPE TOOL EC2 INSTANCE ONE
+
+#################################################################################################################################
+  CAPEInstance1:
+    DependsOn: CAPEEC2LaunchTemplate 
+    Type: AWS::EC2::Instance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Tags:
+        - Key: Project
+          Value: !Ref Project 
+        - Key: CostCenter
+          Value: !Ref CostCenter 
+        - Key: Name
+          Value: 'ev-u-cape-ec1'
+
+      BlockDeviceMappings:
+        -
+          DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 25 
+            VolumeType: gp2
+            Encrypted: true
+      IamInstanceProfile: !Ref CAPEEC2InstanceProfile
+      LaunchTemplate:
+        LaunchTemplateName: CAPE 
+        Version: 1 
+      InstanceInitiatedShutdownBehavior: stop
+      SubnetId: !Ref PrivateSubnetId01 
+      SecurityGroupIds:
+         - !Ref CAPESecurityGroupID
+#################################################################################################################################
+#
+#### CAPE TOOL EC2 INSTANCE TWO 
+#
+##################################################################################################################################
+  CAPEInstance2:
+    DependsOn: CAPEEC2LaunchTemplate 
+    Type: AWS::EC2::Instance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Tags:
+        - Key: Project
+          Value: !Ref Project 
+        - Key: CostCenter
+          Value: !Ref CostCenter 
+        - Key: Name
+          Value: ev-u-cape-ec2
+      BlockDeviceMappings:
+        -
+          DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 25 
+            VolumeType: gp2
+            Encrypted: true
+      IamInstanceProfile: !Ref CAPEEC2InstanceProfile
+      LaunchTemplate:
+        LaunchTemplateName: CAPE 
+        Version: 1 
+      InstanceInitiatedShutdownBehavior: stop
+      SubnetId: !Ref PrivateSubnetId02
+      SecurityGroupIds:
+         - !Ref CAPESecurityGroupID
+
+############################################################################################################################
+
+# CAPE TOOL  EC2  INSTANCES IP ADDRESS 
+
+###########################################################################################################################
+Outputs:
+  CAPEInstance1:
+    Description: CAPE EC2 Instance1 
+    Value:  !GetAtt CAPEInstance1.PrivateIp
+  CAPEInstance2:
+    Description: CAPE EC2 Instance2 
+    Value:  !GetAtt CAPEInstance2.PrivateIp
