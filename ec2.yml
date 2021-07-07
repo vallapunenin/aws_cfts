@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Provision EC2 Instance for Cape tool integration POC 
+Description: Provision EC2 Instance for testing POC 
 
 ###############################################################################################################################
 # GLOBAL PARAMETER SECTION FOR ENV TYPE, VPC, PRIVATE SUBNETS, PROJECT, COST CENTER
@@ -8,21 +8,19 @@ Description: Provision EC2 Instance for Cape tool integration POC
 Parameters:
 
   EnvType:
-    Description: 'Environment type (eg, dev, qa, prod)'
+    Description: 'Environment type (eg, dev, test, prod)'
     Type: String
     AllowedValues:
-      - sandbox
       - evaluation
       - development
       - ftest
-      - ptest
       - staging
+      - ptest
       - production
-      - sharedservices
     Default: evaluation
   AppName:
     Type: String
-    Default: CAPE 
+    Default: test 
   PrivateSubnetId01:
     Type : 'AWS::SSM::Parameter::Value<String>'
     Default: /serverless/global/misc/PrivateSubnetId01
@@ -47,7 +45,7 @@ Parameters:
   KeyName:
     Description: The EC2 Key Pair to allow SSH access to the node instances
     Type: 'AWS::EC2::KeyPair::KeyName'
-    Default: cape # FOR EVALUATION 
+    Default: test # FOR EVALUATION 
     
   ImageId:
     Description: The AMI to create EC2 instances
@@ -59,25 +57,24 @@ Resources:
 ## LAUNCH TEMPLATE FOR EC2 INSTANCE
 
 #################################################################################################################################
-
   
-  CAPEEC2LaunchTemplate:
+  TESTEC2LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      LaunchTemplateName: CAPE 
+      LaunchTemplateName: TEST 
       LaunchTemplateData:
-        InstanceType: t3.xlarge 
+        InstanceType: t3.nano 
         DisableApiTermination: 'true'
         KeyName: !Ref KeyName
         ImageId: !Ref ImageId 
         BlockDeviceMappings:
           - DeviceName: /dev/sda1
             Ebs:
-              VolumeSize: 25 
+              VolumeSize: 10 
               VolumeType: gp2
               Encrypted: true
         SecurityGroupIds:
-          - !Ref CAPESecurityGroupID
+          - !Ref TESTSecurityGroupID
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -86,18 +83,18 @@ Resources:
               - Key: Project
                 Value: !Ref Project 
               - Key: Pod
-                Value: CAPE 
+                Value: TEST 
               - Key: Technology
-                Value: CAPE
+                Value: TEST
         
   CAPESecurityGroupID:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: 'Cape tool integration POC' 
+      GroupDescription: 'Test POC' 
       GroupName: !Sub "${EnvType}-${AppName}-SG" 
       Tags:
         - Key: Name
-          Value: CAPE-POC 
+          Value: TEST-POC 
         - Key: Project
           Value: !Ref Project 
         - Key: CostCenter
@@ -118,8 +115,8 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: /
-      Roles: [!Ref 'CAPEEC2InstanceRole']
-  CAPEEC2InstanceRole:
+      Roles: [!Ref 'TESTEC2InstanceRole']
+  TESTEC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -138,12 +135,10 @@ Resources:
               - "ec2:*"
             Resource: '*'
 #################################################################################################################################
-
-### CAPE TOOL EC2 INSTANCE ONE
-
+### EC2 INSTANCE 
 #################################################################################################################################
-  CAPEInstance1:
-    DependsOn: CAPEEC2LaunchTemplate 
+  TESTInstance:
+    DependsOn: TESTEC2LaunchTemplate 
     Type: AWS::EC2::Instance
     DeletionPolicy: Retain
     UpdateReplacePolicy: Snapshot
@@ -154,66 +149,27 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter 
         - Key: Name
-          Value: 'ev-u-cape-ec1'
+          Value: 'eval-test-ec2'
 
       BlockDeviceMappings:
         -
           DeviceName: /dev/sda1
           Ebs:
-            VolumeSize: 25 
+            VolumeSize: 10 
             VolumeType: gp2
             Encrypted: true
-      IamInstanceProfile: !Ref CAPEEC2InstanceProfile
+      IamInstanceProfile: !Ref TESTEC2InstanceProfile
       LaunchTemplate:
-        LaunchTemplateName: CAPE 
+        LaunchTemplateName: TEST 
         Version: 1 
       InstanceInitiatedShutdownBehavior: stop
       SubnetId: !Ref PrivateSubnetId01 
       SecurityGroupIds:
-         - !Ref CAPESecurityGroupID
-#################################################################################################################################
-#
-#### CAPE TOOL EC2 INSTANCE TWO 
-#
-##################################################################################################################################
-  CAPEInstance2:
-    DependsOn: CAPEEC2LaunchTemplate 
-    Type: AWS::EC2::Instance
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Snapshot
-    Properties:
-      Tags:
-        - Key: Project
-          Value: !Ref Project 
-        - Key: CostCenter
-          Value: !Ref CostCenter 
-        - Key: Name
-          Value: ev-u-cape-ec2
-      BlockDeviceMappings:
-        -
-          DeviceName: /dev/sda1
-          Ebs:
-            VolumeSize: 25 
-            VolumeType: gp2
-            Encrypted: true
-      IamInstanceProfile: !Ref CAPEEC2InstanceProfile
-      LaunchTemplate:
-        LaunchTemplateName: CAPE 
-        Version: 1 
-      InstanceInitiatedShutdownBehavior: stop
-      SubnetId: !Ref PrivateSubnetId02
-      SecurityGroupIds:
-         - !Ref CAPESecurityGroupID
-
+         - !Ref TESTSecurityGroupID
 ############################################################################################################################
-
-# CAPE TOOL  EC2  INSTANCES IP ADDRESS 
-
+#  EC2  INSTANCES IP ADDRESS 
 ###########################################################################################################################
 Outputs:
-  CAPEInstance1:
-    Description: CAPE EC2 Instance1 
-    Value:  !GetAtt CAPEInstance1.PrivateIp
-  CAPEInstance2:
-    Description: CAPE EC2 Instance2 
-    Value:  !GetAtt CAPEInstance2.PrivateIp
+  CAPEInstance:
+    Description: TEST EC2 Instance 
+    Value:  !GetAtt TESTInstance.PrivateIp
